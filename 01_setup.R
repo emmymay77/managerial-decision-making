@@ -137,3 +137,103 @@ mountcastle_pa %>%
     delta_home_win_exp,
     des
   )
+
+# --------------------------------------------------
+# IDENTIFY PINCH-HITTING DECISIONS
+# --------------------------------------------------
+
+pinch_hit_subs %>%
+  select(
+    details.description,
+    details.event,
+    details.eventType,
+    position.name
+  ) %>%
+  as.data.frame()
+
+# Function to identify all pinch-hitting decisions in a game
+
+get_pinch_hit_decisions <- function(game_id) {
+  
+  # Pull play-by-play data for the game
+  pbp <- mlb_pbp(game_id)
+  
+  # If this game has no substitution information, return nothing
+  if (!"isSubstitution" %in% names(pbp)) {
+    return(tibble())
+  }
+  
+  # Identify pinch-hitting substitutions
+  pinch_hits <- pbp %>%
+    filter(
+      isSubstitution == TRUE,
+      position.name == "Pinch Hitter"
+    ) %>%
+    select(
+      any_of(c(
+        "about.inning",
+        "about.halfInning",
+        "batting_team",
+        "player.id",
+        "replacedPlayer.id",
+        "battingOrder",
+        "details.description"
+      ))
+    ) %>%
+    mutate(
+      game_pk = game_id
+    )
+  
+  return(pinch_hits)
+}
+
+# test the new function
+test_pinch_decisions <- get_pinch_hit_decisions(test_game)
+
+View(test_pinch_decisions)
+
+# test for a new game
+
+game_ids <- pa_data %>%
+  distinct(game_pk) %>%
+  pull(game_pk)
+
+length(game_ids)
+head(game_ids)
+
+second_game_test <- get_pinch_hit_decisions(game_ids[2])
+View(second_game_test)
+
+# apply function to every game
+
+all_pinch_hit_decisions <- map_dfr(
+  game_ids,
+  get_pinch_hit_decisions
+)
+nrow(all_pinch_hit_decisions)
+View(all_pinch_hit_decisions)
+all_pinch_hit_decisions %>%
+  count(batting_team, sort = TRUE)
+
+# test game 8 (no pinch-hit substitutions)
+game_8_pbp <- mlb_pbp(game_ids[8])
+game_ids[8]
+game_8_pbp %>%
+  filter(
+    isSubstitution == TRUE,
+    position.name == "Pinch Hitter"
+  ) %>%
+  select(
+    any_of(c(
+      "details.description",
+      "player.id",
+      "replacedPlayer.id",
+      "position.name"
+    ))
+  )
+
+# --------------------------------------------------
+# IDENTIFY MANAGER RESPONSIBLE FOR EACH DECISION
+# --------------------------------------------------
+
+# TODO: attach the responsible manager to each team/game
